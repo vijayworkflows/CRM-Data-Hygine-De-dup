@@ -5,6 +5,9 @@ fields, validates records, identifies potential duplicates, and prepares
 a clean CSV of valid, non-duplicate contacts for downstream GTM
 workflows.
 
+<img width="934" height="344" alt="screenshot" src="https://github.com/user-attachments/assets/bf8aed3b-a46c-4988-a8ac-50d91b5830d0" />
+
+
 ## Problem
 
 CRM data can contain incomplete fields, inconsistent formatting, and
