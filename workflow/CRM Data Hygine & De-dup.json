@@ -1,0 +1,257 @@
+{
+  "name": "Project07_CRM Data Hygine & Dedup",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        -64
+      ],
+      "id": "0fd62c28-0e86-4ae9-8f2e-5149501594f0",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "authentication": "appToken",
+        "operation": "getAll",
+        "additionalFields": {
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "firstname",
+                "lastname",
+                "company",
+                "lifecyclestage",
+                "jobtitle",
+                "work_email",
+                "email",
+                "phone"
+              ]
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        0
+      ],
+      "id": "a9ed8aa3-eb70-48b2-969d-3ba4f6156ed0",
+      "name": "Get many contacts"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst validContacts = [];\nconst invalidContacts = [];\n\nfor (const item of items) {\n  const contact = item.json;\n  const errors = [];\n\n  // Rule 1: First name is required\n  if (!contact.firstName) {\n    errors.push(\"Missing first name\");\n  }\n\n  // Rule 2: Last name is required\n  if (!contact.lastName) {\n    errors.push(\"Missing last name\");\n  }\n\n  // Rule 3: Email is required\n  if (!contact.email) {\n    errors.push(\"Missing email\");\n  } else {\n    // Rule 4: Email must have a basic valid structure\n    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\n    if (!emailRegex.test(contact.email)) {\n      errors.push(\"Invalid email format\");\n    }\n  }\n\n  // Rule 5: Phone is optional, but if provided, validate it\n  if (contact.phone) {\n    const phoneDigits = contact.phone.replace(/\\D/g, \"\");\n\n    if (phoneDigits.length < 7 || phoneDigits.length > 15) {\n      errors.push(\"Invalid phone number length\");\n    }\n  }\n\n  const validatedContact = {\n    ...contact,\n    isValid: errors.length === 0,\n    validationErrors: errors,\n    validationStatus: errors.length === 0 ? \"VALID\" : \"INVALID\",\n  };\n\n  if (validatedContact.isValid) {\n    validContacts.push(validatedContact);\n  } else {\n    invalidContacts.push(validatedContact);\n  }\n}\n\nreturn [\n  {\n    json: {\n      totalProcessed: items.length,\n      validCount: validContacts.length,\n      invalidCount: invalidContacts.length,\n      validContacts,\n      invalidContacts,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        96
+      ],
+      "id": "0234c0c5-3abb-499b-9137-2463cbe097f1",
+      "name": "Contact Validation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction getValue(value) {\n  if (value === null || value === undefined) return \"\";\n  if (typeof value === \"object\" && value.value !== undefined) {\n    return value.value ?? \"\";\n  }\n  return value;\n}\n\nfunction getField(contact, fieldNames) {\n  const properties = contact.properties || {};\n\n  for (const field of fieldNames) {\n    const value = getValue(properties[field] ?? contact[field]);\n\n    if (value !== null && value !== undefined && String(value).trim() !== \"\") {\n      return String(value).trim();\n    }\n  }\n\n  return \"\";\n}\n\nfunction normalizeName(value) {\n  return String(value || \"\")\n    .trim()\n    .replace(/\\s+/g, \" \")\n    .toLowerCase()\n    .replace(/\\b\\w/g, char => char.toUpperCase());\n}\n\nfunction normalizeEmail(value) {\n  return String(value || \"\")\n    .trim()\n    .toLowerCase();\n}\n\nfunction normalizePhone(value) {\n  const raw = String(value || \"\").trim();\n\n  if (!raw) return \"\";\n\n  const hasPlus = raw.startsWith(\"+\");\n  const digits = raw.replace(/\\D/g, \"\");\n\n  return hasPlus ? `+${digits}` : digits;\n}\n\nfunction normalizeCompany(value) {\n  return String(value || \"\")\n    .trim()\n    .replace(/\\s+/g, \" \");\n}\n\nreturn items.map(item => {\n  const contact = item.json;\n\n  const firstName = getField(contact, [\"firstname\", \"firstName\"]);\n  const lastName = getField(contact, [\"lastname\", \"lastName\"]);\n  const email = getField(contact, [\"email\", \"email\", \"work_email\"]);\n  const phone = getField(contact, [\"phone\", \"phone\", \"phone\"]);\n  const company = getField(contact, [\"company\"]);\n  const jobTitle = getField(contact, [\"jobtitle\", \"jobTitle\"]);\n  const lifecycleStage = getField(contact, [\"lifecyclestage\", \"lifecycleStage\"]);\n\n  return {\n    json: {\n      hubspotId: contact.vid ?? contact.id ?? \"\",\n      firstName: normalizeName(firstName),\n      lastName: normalizeName(lastName),\n      email: normalizeEmail(email),\n      phone: normalizePhone(phone),\n      company: normalizeCompany(company),\n      jobTitle: String(jobTitle || \"\").trim(),\n      lifecycleStage: String(lifecycleStage || \"\").trim(),\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        96
+      ],
+      "id": "4af3d719-d515-4238-9a36-0b5212319c2d",
+      "name": "Normalisation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst contacts = input.validContacts || [];\n\nconst emailGroups = {};\nconst phoneGroups = {};\n\nfunction normalizePhoneForMatch(phone) {\n  let digits = String(phone || \"\").replace(/\\D/g, \"\");\n\n  // For this test dataset, treat India's +91 prefix\n  // and a 10-digit Indian number as equivalent.\n  if (digits.length === 12 && digits.startsWith(\"91\")) {\n    digits = digits.slice(2);\n  }\n\n  return digits;\n}\n\n// 1. Build matching groups\nfor (const contact of contacts) {\n  const email = String(contact.email || \"\").trim().toLowerCase();\n\n  const phone = normalizePhoneForMatch(contact.phone);\n\n  if (email) {\n    if (!emailGroups[email]) {\n      emailGroups[email] = [];\n    }\n\n    emailGroups[email].push(contact);\n  }\n\n  if (phone) {\n    if (!phoneGroups[phone]) {\n      phoneGroups[phone] = [];\n    }\n\n    phoneGroups[phone].push(contact);\n  }\n}\n\n// 2. Identify duplicate groups\nconst duplicateGroups = [];\nconst duplicateContactIds = new Set();\nconst duplicateReasons = {};\n\nfunction recordDuplicateGroup(type, key, group) {\n  if (group.length < 2) return;\n\n  const ids = group.map(contact => contact.hubspotId);\n\n  duplicateGroups.push({\n    matchType: type,\n    matchKey: key,\n    count: group.length,\n    contacts: group.map(contact => ({\n      hubspotId: contact.hubspotId,\n      firstName: contact.firstName,\n      lastName: contact.lastName,\n      email: contact.email,\n      phone: contact.phone,\n      company: contact.company\n    }))\n  });\n\n  for (const contact of group) {\n    duplicateContactIds.add(contact.hubspotId);\n\n    if (!duplicateReasons[contact.hubspotId]) {\n      duplicateReasons[contact.hubspotId] = [];\n    }\n\n    duplicateReasons[contact.hubspotId].push({\n      type,\n      matchedContactIds: ids.filter(id => id !== contact.hubspotId)\n    });\n  }\n}\n\nfor (const [email, group] of Object.entries(emailGroups)) {\n  recordDuplicateGroup(\"EXACT_EMAIL\", email, group);\n}\n\nfor (const [phone, group] of Object.entries(phoneGroups)) {\n  recordDuplicateGroup(\"PHONE_MATCH\", phone, group);\n}\n\n// 3. Attach duplicate flags to every contact\nconst reviewedContacts = contacts.map(contact => ({\n  ...contact,\n  isDuplicate: duplicateContactIds.has(contact.hubspotId),\n  duplicateReasons: duplicateReasons[contact.hubspotId] || []\n}));\n\n// 4. Separate flagged and unflagged records\nconst duplicateContacts = reviewedContacts.filter(contact => contact.isDuplicate);\nconst uniqueContacts = reviewedContacts.filter(contact => !contact.isDuplicate);\n\nreturn [\n  {\n    json: {\n      totalContacts: contacts.length,\n      uniqueCount: uniqueContacts.length,\n      flaggedDuplicateCount: duplicateContacts.length,\n      duplicateGroupCount: duplicateGroups.length,\n      uniqueContacts,\n      duplicateContacts,\n      duplicateGroups\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        96
+      ],
+      "id": "09054e34-8600-43ff-aa15-c7e99430dce7",
+      "name": "De-Dup"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all records\nconst input = $input.first().json;\n\nconst contacts = [\n  ...(input.uniqueContacts || []),\n  ...(input.duplicateContacts || [])\n];\n\n// 1. Normalize text before comparing\nfunction normalizeText(value) {\n  return String(value || \"\")\n    .toLowerCase()\n    .replace(/[^a-z0-9]/g, \"\");\n}\n\n// 2. Calculate Levenshtein edit distance\nfunction levenshtein(a, b) {\n  const rows = a.length + 1;\n  const cols = b.length + 1;\n\n  const matrix = Array.from({ length: rows }, () =>\n    Array(cols).fill(0)\n  );\n\n  for (let i = 0; i < rows; i++) {\n    matrix[i][0] = i;\n  }\n\n  for (let j = 0; j < cols; j++) {\n    matrix[0][j] = j;\n  }\n\n  for (let i = 1; i < rows; i++) {\n    for (let j = 1; j < cols; j++) {\n      const cost = a[i - 1] === b[j - 1] ? 0 : 1;\n\n      matrix[i][j] = Math.min(\n        matrix[i - 1][j] + 1,\n        matrix[i][j - 1] + 1,\n        matrix[i - 1][j - 1] + cost\n      );\n    }\n  }\n\n  return matrix[rows - 1][cols - 1];\n}\n\n// 3. Convert edit distance to similarity percentage\nfunction similarity(a, b) {\n  if (!a || !b) return 0;\n\n  const distance = levenshtein(a, b);\n  const maxLength = Math.max(a.length, b.length);\n\n  return Math.round((1 - distance / maxLength) * 100);\n}\n\n// 4. Compare every contact against every other contact\nconst fuzzyCandidates = [];\nconst comparedPairs = new Set();\n\nconst NAME_THRESHOLD = 85;\nconst COMPANY_THRESHOLD = 75;\n\nfor (let i = 0; i < contacts.length; i++) {\n  for (let j = i + 1; j < contacts.length; j++) {\n    const contactA = contacts[i];\n    const contactB = contacts[j];\n\n    // Avoid comparing the same contact with itself\n    if (contactA.hubspotId === contactB.hubspotId) {\n      continue;\n    }\n\n    // Prevent duplicate pair comparisons\n    const pairKey = [\n      contactA.hubspotId,\n      contactB.hubspotId\n    ].sort().join(\"_\");\n\n    if (comparedPairs.has(pairKey)) {\n      continue;\n    }\n\n    comparedPairs.add(pairKey);\n\n    const nameA = normalizeText(\n      `${contactA.firstName} ${contactA.lastName}`\n    );\n\n    const nameB = normalizeText(\n      `${contactB.firstName} ${contactB.lastName}`\n    );\n\n    const companyA = normalizeText(contactA.company);\n    const companyB = normalizeText(contactB.company);\n\n    const nameScore = similarity(nameA, nameB);\n    const companyScore = similarity(companyA, companyB);\n\n    // Flag pairs that pass BOTH similarity thresholds\n    if (\n      nameScore >= NAME_THRESHOLD &&\n      companyScore >= COMPANY_THRESHOLD\n    ) {\n      fuzzyCandidates.push({\n        matchType: \"FUZZY_NAME_COMPANY\",\n        nameSimilarity: nameScore,\n        companySimilarity: companyScore,\n        contacts: [\n          {\n            hubspotId: contactA.hubspotId,\n            fullName: `${contactA.firstName} ${contactA.lastName}`,\n            email: contactA.email,\n            company: contactA.company\n          },\n          {\n            hubspotId: contactB.hubspotId,\n            fullName: `${contactB.firstName} ${contactB.lastName}`,\n            email: contactB.email,\n            company: contactB.company\n          }\n        ]\n      });\n    }\n  }\n}\n\n// 5. Return results\nreturn [\n  {\n    json: {\n      totalContacts: contacts.length,\n      totalPairsCompared: comparedPairs.size,\n      fuzzyCandidateCount: fuzzyCandidates.length,\n      thresholds: {\n        nameSimilarity: NAME_THRESHOLD,\n        companySimilarity: COMPANY_THRESHOLD\n      },\n      fuzzyCandidates\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        96
+      ],
+      "id": "b41a2fb5-894f-43ac-bb38-59fa20f498cd",
+      "name": "Fuzzy Match Engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst duplicateData = $(\"De-Dup\").first().json;\nconst fuzzyData = $(\"Fuzzy Match Engine\").first().json;\n\nconst contacts = [\n  ...(duplicateData.uniqueContacts || []),\n  ...(duplicateData.duplicateContacts || [])\n];\n\nconst contactsById = new Map(\n  contacts.map(contact => [\n    String(contact.hubspotId),\n    contact\n  ])\n);\n\nconst pairMap = new Map();\n\nfunction addPair(contactAId, contactBId, signal) {\n  const idA = String(contactAId);\n  const idB = String(contactBId);\n\n  if (!contactsById.has(idA) || !contactsById.has(idB)) {\n    return;\n  }\n\n  const sortedIds = [idA, idB].sort();\n  const pairKey = sortedIds.join(\"::\");\n\n  if (!pairMap.has(pairKey)) {\n    pairMap.set(pairKey, {\n      contactIds: sortedIds,\n      matchSignals: []\n    });\n  }\n\n  const pair = pairMap.get(pairKey);\n\n  const signalExists = pair.matchSignals.some(\n    existing =>\n      existing.matchType === signal.matchType &&\n      existing.matchKey === signal.matchKey\n  );\n\n  if (!signalExists) {\n    pair.matchSignals.push(signal);\n  }\n}\n\n// Add exact email and phone matches\nfor (const group of duplicateData.duplicateGroups || []) {\n  const groupContacts = group.contacts || [];\n\n  for (let i = 0; i < groupContacts.length; i++) {\n    for (let j = i + 1; j < groupContacts.length; j++) {\n      addPair(\n        groupContacts[i].hubspotId,\n        groupContacts[j].hubspotId,\n        {\n          matchType: group.matchType,\n          matchKey: group.matchKey\n        }\n      );\n    }\n  }\n}\n\n// Add fuzzy matches\nfor (const candidate of fuzzyData.fuzzyCandidates || []) {\n  const matchedContacts = candidate.contacts || [];\n\n  if (matchedContacts.length !== 2) continue;\n\n  addPair(\n    matchedContacts[0].hubspotId,\n    matchedContacts[1].hubspotId,\n    {\n      matchType: candidate.matchType,\n      nameSimilarity: candidate.nameSimilarity,\n      companySimilarity: candidate.companySimilarity\n    }\n  );\n}\n\n// Build consolidated pairs\nconst duplicatePairs = Array.from(pairMap.values()).map(pair => ({\n  contactIds: pair.contactIds,\n  contacts: pair.contactIds.map(id => contactsById.get(id)),\n  matchSignals: pair.matchSignals\n}));\n\n// Identify flagged contact IDs\nconst flaggedIds = new Set();\n\nfor (const pair of duplicatePairs) {\n  for (const id of pair.contactIds) {\n    flaggedIds.add(id);\n  }\n}\n\n// Review every contact\nconst reviewedContacts = contacts.map(contact => {\n  const contactId = String(contact.hubspotId);\n\n  const relatedPairs = duplicatePairs.filter(pair =>\n    pair.contactIds.includes(contactId)\n  );\n\n  return {\n    ...contact,\n    isDuplicate: flaggedIds.has(contactId),\n    consolidatedMatchCount: relatedPairs.length,\n    consolidatedMatchSignals: relatedPairs.flatMap(\n      pair => pair.matchSignals\n    )\n  };\n});\n\nconst duplicateContacts = reviewedContacts.filter(\n  contact => contact.isDuplicate\n);\n\nconst uniqueContacts = reviewedContacts.filter(\n  contact => !contact.isDuplicate\n);\n\nreturn [\n  {\n    json: {\n      totalContacts: reviewedContacts.length,\n      uniqueCount: uniqueContacts.length,\n      flaggedDuplicateCount: duplicateContacts.length,\n      duplicatePairCount: duplicatePairs.length,\n      duplicateContacts,\n      uniqueContacts,\n      duplicatePairs\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        96
+      ],
+      "id": "3f75f2db-5ff4-479d-87c6-0ac67dffe962",
+      "name": "De-Dups Consolidation"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst result = $(\"De-Dups Consolidation\").first().json;\nconst validation = $(\"Contact Validation\").first().json;\n\n// 1. Prepare the three datasets\nconst uniqueContacts = result.uniqueContacts || [];\nconst duplicateContacts = result.duplicateContacts || [];\nconst invalidContacts = validation.invalidContacts || [];\n\n// 2. Define the columns we want in our CSV files\nconst columns = [\n  \"hubspotId\",\n  \"firstName\",\n  \"lastName\",\n  \"email\",\n  \"phone\",\n  \"company\",\n  \"jobTitle\",\n  \"lifecycleStage\"\n];\n\n// 3. Keep only the selected columns\nfunction prepareRows(contacts) {\n  return contacts.map(contact => {\n    const row = {};\n\n    for (const column of columns) {\n      row[column] = contact[column] ?? \"\";\n    }\n\n    return row;\n  });\n}\n\n// 4. Return all three datasets\nreturn [\n  {\n    json: {\n      fileName: \"unique_contacts.csv\",\n      recordCount: uniqueContacts.length,\n      rows: prepareRows(uniqueContacts)\n    }\n  },\n  {\n    json: {\n      fileName: \"duplicate_contacts.csv\",\n      recordCount: duplicateContacts.length,\n      rows: prepareRows(duplicateContacts)\n    }\n  },\n  {\n    json: {\n      fileName: \"invalid_contacts.csv\",\n      recordCount: invalidContacts.length,\n      rows: prepareRows(invalidContacts)\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        96
+      ],
+      "id": "990cc5b2-66ff-40c2-a82c-22fbe96da1f8",
+      "name": ".csv Preparation"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst dataset = $(\".csv Preparation\").all()[0].json;\n\nreturn dataset.rows.map(row => ({\n  json: row\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        96
+      ],
+      "id": "c87ea995-4a81-409b-a555-13df8d508a0c",
+      "name": "Unique Contacts"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        96
+      ],
+      "id": "5e4f1f0e-6acc-4d5e-84fb-005ee9302391",
+      "name": "Convert to File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get many contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many contacts": {
+      "main": [
+        [
+          {
+            "node": "Normalisation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalisation": {
+      "main": [
+        [
+          {
+            "node": "Contact Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Validation": {
+      "main": [
+        [
+          {
+            "node": "De-Dup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "De-Dup": {
+      "main": [
+        [
+          {
+            "node": "Fuzzy Match Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuzzy Match Engine": {
+      "main": [
+        [
+          {
+            "node": "De-Dups Consolidation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "De-Dups Consolidation": {
+      "main": [
+        [
+          {
+            "node": ".csv Preparation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    ".csv Preparation": {
+      "main": [
+        [
+          {
+            "node": "Unique Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unique Contacts": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

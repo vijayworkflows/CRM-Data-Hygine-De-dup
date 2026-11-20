@@ -1,0 +1,23 @@
+﻿hubspotId,firstName,lastName,email,phone,company,jobTitle,lifecycleStage
+6.00403E+11,Brian,Halligan (Sample Contact),bh@hubspot.com,,HubSpot,Executive Chairperson,lead
+6.00404E+11,Maria,Johnson (Sample Contact),emailmaria@hubspot.com,,HubSpot,Salesperson,lead
+6.02594E+11,Ananya,Iyer,ananya.iyer@bluepeakanalytics.io,+919876510006,BluePeak Analytics,RevOps Director,lead
+6.02668E+11,Karan,Joshi,karan.joshi@vertexbridge.com,+919876510018,VertexBridge Systems,Head of Sales,lead
+6.02678E+11,Leah,Fernandes,leah.fernandes@mapleline.digital,+919876510019,Mapleline Digital,Founder,subscriber
+6.02678E+11,Dev,Patel,dev.patel@vertexbridge.com,+919876510012,VertexBridge Systems,Sales Director,customer
+6.02679E+11,Arjun,Reddy,arjun.reddy@brightpathconsulting.in,+919876510014,BrightPath Consulting,Business Development Manager,lead
+6.0268E+11,Aditya,Kulkarni,aditya.kulkarni@orbitedge.com,+919876510022,OrbitEdge Software,Account Executive,lead
+6.0268E+11,Rahul,Bose,rahul.bose@crestwave-tech.com,+919876510024,Crestwave Technologies,Sales Manager,lead
+6.02682E+11,Diya,Rao,diya.rao@northstarcloud.com,,Northstar Cloud Systems,Marketing Manager,lead
+6.02682E+11,Zoya,Khan,zoya.khan@bluepeakanalytics.io,+919876510023,BluePeak Analytics,Marketing Specialist,lead
+6.02682E+11,Tara,Singh,tara.singh@summitloop.io,+919876510015,SummitLoop Technologies,VP Marketing,opportunity
+6.02685E+11,Kabir,Shah,kabir.shah@bluepeakanalytics.io,+919876510004,BluePeak Analytics,VP Sales,opportunity
+6.02685E+11,Meera,Nair,meera.nair@crestwave-tech.com,,Crestwave Technologies,Demand Generation Manager,lead
+6.02685E+11,Neil,George,neil.george@novastacklabs.com,+919876510020,NovaStack Labs,Growth Manager,lead
+6.02687E+11,Ishaan,Verma,ishaan.verma@orbitedge.com,+919876510010,OrbitEdge Software,Chief Revenue Officer,opportunity
+6.02688E+11,Ira,Pillai,ira.pillai@vertexbridge.com,+919876510025,VertexBridge Systems,Marketing Director,lead
+6.02719E+11,Priya,Menon,priya.menon@northstarcloud.com,+919876510017,Northstar Cloud Systems,CMO,lead
+6.0272E+11,Maya,Raman,maya.raman@summitloop.io,+919876510021,SummitLoop Technologies,Revenue Operations Lead,lead
+6.0272E+11,Nila,Krishnan,nila.krishnan@novastacklabs.com,+919876510013,NovaStack Labs,Marketing Operations Manager,lead
+6.02721E+11,Sara,Thomas,sara.thomas@mapleline.digital,+919876510011,Mapleline Digital,Marketing Lead,lead
+6.02721E+11,Vikram,Das,vikram.das@orbitedge.com,+919876510016,OrbitEdge Software,Sales Operations Manager,lead
